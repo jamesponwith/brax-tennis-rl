@@ -1,0 +1,21 @@
+# Validate: no green, no merge. AI review runs locally in the pre-push hook
+# (see lefthook.yml), not here — same reasoning as flywheel-template ADR 0002.
+name: pr
+
+on:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run ruff check . && uv run ruff format --check .
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run pytest

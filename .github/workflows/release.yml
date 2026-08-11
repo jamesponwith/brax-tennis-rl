@@ -1,0 +1,20 @@
+# Release: semver tag → GitHub Release with generated notes. Python projects
+# ship no binaries by default; add build/publish steps when there is a
+# package or artifact worth shipping.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

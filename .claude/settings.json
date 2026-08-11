@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run:*)",
+      "Bash(uv sync:*)",
+      "Bash(ruff:*)",
+      "Bash(pytest:*)",
+      "Bash(bd:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [{ "type": "command", "command": "bd prime" }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v uv >/dev/null || exit 0; uv run ruff format --check . || exit 2; uv run ruff check . || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}
