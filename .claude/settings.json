@@ -1,4 +1,37 @@
 {
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "command -v uv \u003e/dev/null || exit 0; uv run ruff format --check . || exit 2; uv run ruff check . || exit 2",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(uv run:*)",
@@ -6,23 +39,6 @@
       "Bash(ruff:*)",
       "Bash(pytest:*)",
       "Bash(bd:*)"
-    ]
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [{ "type": "command", "command": "bd prime" }]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "command -v uv >/dev/null || exit 0; uv run ruff format --check . || exit 2; uv run ruff check . || exit 2"
-          }
-        ]
-      }
     ]
   }
 }

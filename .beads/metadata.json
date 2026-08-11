@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "brax_tennis_rl",
+  "project_id": "cabaf7e8-9865-46fd-ae58-884bebfab3df"
+}
