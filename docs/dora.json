@@ -9,7 +9,7 @@
     "releases_last_30d": 0,
     "releases_total": 0
   },
-  "generated_at": "2026-08-10T07:14:33Z",
+  "generated_at": "2026-08-11T00:38:32Z",
   "lead_time_hours": {
     "median": 0,
     "samples": 0
@@ -18,5 +18,5 @@
     "median": 0,
     "samples": 0
   },
-  "repo": "jamesponwith/flywheel-template-py"
+  "repo": "jamesponwith/brax-tennis-rl"
 }
