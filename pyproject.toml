@@ -1,7 +1,7 @@
 [project]
-name = "flywheel-project"
+name = "brax-tennis-rl"
 version = "0.0.0"
-description = "Replace with your project"
+description = "PPO agent in Brax/JAX learning to intercept and return a tennis ball"
 requires-python = ">=3.12"
 dependencies = []
 
