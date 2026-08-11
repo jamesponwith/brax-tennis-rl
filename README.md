@@ -17,3 +17,4 @@ Built inside the [personal agentic flywheel](https://github.com/jamesponwith/age
 from [flywheel-template-py](https://github.com/jamesponwith/flywheel-template-py) —
 spec-first, `bd` issue tracking, ruff+pytest gates, weekly public
 [DORA metrics](https://jamesponwith.github.io/dora.html).
+
