@@ -3,10 +3,11 @@ name = "brax-tennis-rl"
 version = "0.0.0"
 description = "PPO agent in Brax/JAX learning to intercept and return a tennis ball"
 requires-python = ">=3.12"
-dependencies = []
+# versions pinned exactly by uv.lock (ADR 0002); bump deliberately, not by drift
+dependencies = ["brax>=0.12", "jax>=0.4.35"]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.8"]
+dev = ["pytest>=8", "ruff>=0.8", "matplotlib>=3.9"]
 
 [tool.ruff]
 line-length = 100
