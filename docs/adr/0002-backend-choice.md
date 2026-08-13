@@ -8,7 +8,11 @@ Candidates: brax `mjx` vs `positional`.
 
 ## Decision
 
-**MJX**, on brax 0.14.2 / jax 0.11.0 / mujoco 3.11.0 (pinned by uv.lock).
+**MJX**, on brax 0.14.2 / jax 0.7.2 / mujoco 3.11.0, python 3.12 (pinned by
+uv.lock + `.python-version`). jax is constrained `<0.8`: brax 0.14.2's PPO
+trainer calls `jax.device_put_replicated`, removed in newer jax — training
+crashes on jax 0.11 even though the physics runs. (Bounce numbers below were
+re-verified identical on 0.7.2.)
 
 - positional ignores contact restitution outright: the dropped ball never
   leaves the floor. Disqualified.
