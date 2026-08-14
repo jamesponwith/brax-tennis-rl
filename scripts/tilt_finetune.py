@@ -35,10 +35,11 @@ def expand_params(params, obs_add: int = 2):
         pad = jp.zeros(obs_add) if arr.ndim == 1 else None
         return jp.concatenate([arr, pad]) if pad is not None else arr
 
+    # new dims get std=1: summed_variance must scale with the running count
     norm = norm.replace(
         mean=grow_obs(norm.mean),
         std=jp.concatenate([norm.std, jp.ones(obs_add)]),
-        summed_variance=jp.concatenate([norm.summed_variance, jp.ones(obs_add)]),
+        summed_variance=jp.concatenate([norm.summed_variance, jp.full(obs_add, norm.count)]),
     )
 
     def grow_input(net):
@@ -58,7 +59,11 @@ def expand_params(params, obs_add: int = 2):
     b = policy["params"][last]["bias"]  # (4,)
     zk = jp.zeros((k.shape[0], 1))
     policy["params"][last]["kernel"] = jp.concatenate([k[:, :2], zk, k[:, 2:], zk], axis=1)
-    policy["params"][last]["bias"] = jp.concatenate([b[:2], jp.zeros(1), b[2:], jp.zeros(1)])
+    # tilt log-std bias -4: softplus(-4) ≈ 0.02 → a QUIET wrist. Bias 0 gives
+    # std ~0.7 — full random tilt from step one, the exact face-flattening
+    # poison bisection found; run 1 of this script reproduced it (0.2%
+    # returned from a 71.7% warm start).
+    policy["params"][last]["bias"] = jp.concatenate([b[:2], jp.zeros(1), b[2:], jp.full(1, -4.0)])
     return (norm, policy, value)
 
 
