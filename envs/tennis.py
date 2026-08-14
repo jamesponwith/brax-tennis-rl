@@ -193,13 +193,13 @@ class Tennis(PipelineEnv):
             x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
                 ball_vel[1], -0.1
             )
-            # shape toward the intercept point (x-line, baseline): dropping the
-            # y term let the paddle drift off the baseline with zero gradient —
-            # the 0.5%-flat run's root cause; the probe only worked because its
-            # scripted policy held y home
-            intercept = jp.array([x_at_plane, cfg.paddle_y])
+            # shape toward the intercept point (x-line, baseline) — without
+            # the y term the paddle drifts off the baseline with zero gradient
             shaping = jp.where(
-                incoming, -cfg.shaping_scale * jp.linalg.norm(paddle_pos[:2] - intercept), 0.0
+                incoming,
+                -cfg.shaping_scale
+                * jp.hypot(paddle_pos[0] - x_at_plane, paddle_pos[1] - cfg.paddle_y),
+                0.0,
             )
             contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
             # pace bonus: reward outgoing speed so swinging through the ball
