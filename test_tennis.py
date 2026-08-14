@@ -5,6 +5,10 @@ import jax
 import jax.numpy as jp
 import pytest
 
+# MJX jit-compiles per env config — minutes, not the <10s Build gate.
+# Pre-commit runs `pytest -m "not slow"`; CI runs everything.
+pytestmark = pytest.mark.slow
+
 from envs.tennis import Tennis, TennisConfig, predict_landing
 
 CFG = TennisConfig()

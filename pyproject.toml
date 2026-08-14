@@ -14,3 +14,4 @@ line-length = 100
 
 [tool.pytest.ini_options]
 addopts = "-q"
+markers = ["slow: physics tests with MJX jit compile; pre-commit skips, CI runs all"]
