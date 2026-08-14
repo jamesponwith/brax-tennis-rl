@@ -95,3 +95,76 @@ def test_action_moves_paddle(env):
     for _ in range(25):  # half a second at full +x
         state = step(state, jp.array([1.0, 0.0]))
     assert state.obs[6] > 0.5, "paddle should have moved right"
+
+
+# ---- Phase 2 ----
+
+P2 = TennisConfig(net=True, orientation=True)
+
+
+@pytest.fixture(scope="module")
+def env2() -> Tennis:
+    return Tennis(P2)
+
+
+def _state2(env2: Tennis, ball_pos, ball_vel=(0, 0, 0)):
+    q = jp.concatenate(
+        [jp.zeros(3), jp.array(ball_pos, dtype=jp.float32), jp.array([1.0, 0, 0, 0])]
+    )
+    qd = jp.concatenate([jp.zeros(3), jp.array(ball_vel, dtype=jp.float32), jp.zeros(3)])
+    ps = env2.pipeline_init(q, qd)
+    state = env2.reset(jax.random.PRNGKey(0))
+    return state.replace(pipeline_state=ps, obs=env2._obs(ps))
+
+
+def test_phase2_sizes(env2):
+    state = env2.reset(jax.random.PRNGKey(0))
+    assert state.obs.shape == (12,)
+    assert env2.action_size == 3
+
+
+def test_net_blocks_low_ball(env2):
+    """A ball flying at the net below net height gets stopped; without a net it crosses."""
+    start = (0.0, -1.5, 0.4)
+    vel = (0.0, 8.0, 0.0)
+    step = jax.jit(env2.step)
+    state = _state2(env2, start, vel)
+    for _ in range(20):  # 0.4 s — plenty to travel 1.5 m at 8 m/s
+        state = step(state, jp.zeros(3))
+    assert state.obs[1] < 0.5, "net should stop a below-net-height ball"
+
+
+def test_return_landing_scores(env2):
+    """Post-hit ball (vy > 0) landing near the target center earns both bonuses."""
+    state = _state2(env2, (0.0, P2.target_y - 0.1, 0.05), (0.0, 2.0, -1.0))
+    nxt = jax.jit(env2.step)(state, jp.zeros(3))
+    assert nxt.done == 1.0
+    assert nxt.metrics["returned"] == 1.0
+    assert nxt.metrics["reward_return"] == P2.return_bonus
+    assert nxt.metrics["reward_target"] > 0.5 * P2.target_bonus
+
+
+def test_incoming_ball_landing_does_not_score(env2):
+    """A ball still flying -y (never hit) landing on the far half scores nothing."""
+    state = _state2(env2, (0.0, P2.target_y, 0.05), (0.0, -2.0, -1.0))
+    nxt = jax.jit(env2.step)(state, jp.zeros(3))
+    assert nxt.metrics["returned"] == 0.0
+    assert nxt.metrics["reward_return"] == 0.0
+    assert nxt.done == 0.0, "incoming bounces are not terminal"
+
+
+def test_contact_event_needs_vy_flip(env2):
+    """Sitting near the paddle without a -to-+ vy flip is not a contact event."""
+    state = _state2(env2, (0.0, P2.paddle_y, 0.5), (0.0, 1.0, 0.0))  # already outgoing
+    nxt = jax.jit(env2.step)(state, jp.zeros(3))
+    assert nxt.metrics["interception"] == 0.0
+
+
+def test_phase2_serves_clear_net(env2):
+    """Every serve's ballistic arc clears the net — else net rebounds fake returns."""
+    keys = jax.random.split(jax.random.PRNGKey(3), 100)
+    obs = jax.vmap(env2.reset)(keys).obs
+    h, vy, vz = obs[:, 2], obs[:, 4], obs[:, 5]
+    t_net = P2.serve_y / -vy
+    z_at_net = h + vz * t_net - 0.5 * 9.81 * t_net**2
+    assert jp.all(z_at_net > P2.net_height), "a serve would hit the net"
