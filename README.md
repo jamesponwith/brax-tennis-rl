@@ -11,13 +11,15 @@ Status: **Phase 1 complete — 95.2% interception over 1000 random serves**
 
 ![Phase 1 training curve: interception rate climbing from 11% to a stable ~95% plateau](docs/phase1_curve.png)
 
-Reproduce: `uv run python scripts/train_tennis.py` (~20 min CPU), then open
-`out/phase1_rollout.html` to watch the paddle slide to meet serves.
+**Phase 2 complete — 71.7% of serves returned over the net into the far
+court** (target ≥70%; final 1000-serve eval, recent evals 67–72%), stock PPO,
+10.9M env steps, laptop CPU. It took six training runs and three recorded
+reward hacks to get here — the debugging story is the writeup.
 
-Phase 2 (`--phase2`: net, target region, paddle tilt) is in progress — the
-20M-step run wants a Colab GPU (per SPEC's compute budget), not a laptop:
-clone the repo in Colab, `pip install uv`, then
-`uv run python scripts/train_tennis.py --phase2`.
+![Phase 2 training curve: returned rate climbing to the 70% target line](docs/phase2_curve.png)
+
+Reproduce either phase: `uv run python scripts/train_tennis.py [--phase2]`
+(~20–90 min CPU), then open `out/phase*_rollout.html` to watch the point.
 
 Backend: **MJX** — see [ADR 0002](docs/adr/0002-backend-choice.md) for the
 bounce-fidelity evidence (and why `positional` was disqualified outright).
