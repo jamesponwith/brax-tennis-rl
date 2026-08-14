@@ -147,9 +147,13 @@ class Tennis(PipelineEnv):
     def step(self, state: State, action: jax.Array) -> State:
         cfg = self.cfg
         prev_vy = state.obs[4]
-        ctrl = jp.clip(action, -1.0, 1.0) * cfg.max_paddle_speed
-        if cfg.orientation:  # tilt channel drives the hinge directly (rad/s target)
-            ctrl = ctrl.at[2].set(jp.clip(action[2], -1.0, 1.0) * 6.0)
+        # slide channels in m/s, tilt channel (if any) in rad/s
+        scale = (
+            jp.array([cfg.max_paddle_speed, cfg.max_paddle_speed, 6.0])
+            if cfg.orientation
+            else cfg.max_paddle_speed
+        )
+        ctrl = jp.clip(action, -1.0, 1.0) * scale
         ps = self.pipeline_step(state.pipeline_state, ctrl)
 
         ball_pos, ball_vel = ps.x.pos[1], ps.xd.vel[1]
