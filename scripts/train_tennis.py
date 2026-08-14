@@ -38,10 +38,7 @@ FULL = {
 # ponytail: no orientation — bisection showed the tilt action channel pins PPO
 # at the random baseline (3 flat runs), while the flat face reaches the return
 # target in 2M steps. Tilt / flat-through-lob becomes a Phase 3 curriculum.
-PHASE2 = {
-    "num_timesteps": 10_000_000,
-    "num_evals": 20,
-}
+PHASE2 = {"num_timesteps": 10_000_000}
 SMOKE = {
     "num_timesteps": 100_000,
     "num_evals": 2,
