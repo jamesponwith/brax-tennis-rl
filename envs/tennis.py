@@ -193,11 +193,21 @@ class Tennis(PipelineEnv):
             x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
                 ball_vel[1], -0.1
             )
+            # shape toward the intercept point (x-line, baseline): dropping the
+            # y term let the paddle drift off the baseline with zero gradient —
+            # the 0.5%-flat run's root cause; the probe only worked because its
+            # scripted policy held y home
+            intercept = jp.array([x_at_plane, cfg.paddle_y])
             shaping = jp.where(
-                incoming, -cfg.shaping_scale * jp.abs(paddle_pos[0] - x_at_plane), 0.0
+                incoming, -cfg.shaping_scale * jp.linalg.norm(paddle_pos[:2] - intercept), 0.0
             )
             contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
-            reward_contact = jp.where(contact, cfg.contact_bonus, 0.0)
+            # pace bonus: reward outgoing speed so swinging through the ball
+            # beats the safe-touch local optimum (flat-face rebounds rarely
+            # clear the net; the swing is what must be discovered)
+            reward_contact = jp.where(
+                contact, cfg.contact_bonus + 0.3 * jp.clip(ball_vel[1], 0.0, 10.0), 0.0
+            )
             # a ball that dies rolling short would otherwise rattle out the clock
             dead = incoming & (ball_pos[2] <= BALL_R * 1.2) & (jp.abs(ball_vel[1]) < 1.5)
             landed = (ball_pos[2] <= BALL_R * 1.2) & (ball_vel[2] <= 0.0) & (ball_vel[1] > 0.0)

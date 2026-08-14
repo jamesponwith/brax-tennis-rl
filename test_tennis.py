@@ -108,9 +108,13 @@ def env2() -> Tennis:
     return Tennis(P2)
 
 
-def _state2(env2: Tennis, ball_pos, ball_vel=(0, 0, 0)):
+def _state2(env2: Tennis, ball_pos, ball_vel=(0, 0, 0), paddle=(0, 0, 0)):
     q = jp.concatenate(
-        [jp.zeros(3), jp.array(ball_pos, dtype=jp.float32), jp.array([1.0, 0, 0, 0])]
+        [
+            jp.array(paddle, dtype=jp.float32),
+            jp.array(ball_pos, dtype=jp.float32),
+            jp.array([1.0, 0, 0, 0]),
+        ]
     )
     qd = jp.concatenate([jp.zeros(3), jp.array(ball_vel, dtype=jp.float32), jp.zeros(3)])
     ps = env2.pipeline_init(q, qd)
@@ -169,3 +173,15 @@ def test_phase2_serves_clear_net(env2):
     t_net = P2.serve_y / -vy
     z_at_net = h + vz * t_net - 0.5 * 9.81 * t_net**2
     assert jp.all(z_at_net > P2.net_height), "a serve would hit the net"
+
+
+def test_shaping_anchors_paddle_to_baseline(env2):
+    """Same x, drifted off the baseline toward the net -> worse shaping.
+
+    Regression: x-only shaping let the paddle wander in y with zero
+    gradient, which flatlined the first Phase 2 training run at 0.5%.
+    """
+    ball = {"ball_pos": (0.0, 4.0, 2.0), "ball_vel": (0.0, -9.0, 0.0)}
+    home = jax.jit(env2.step)(_state2(env2, **ball), jp.zeros(3))
+    drifted = jax.jit(env2.step)(_state2(env2, **ball, paddle=(0.0, 3.0, 0.0)), jp.zeros(3))
+    assert home.metrics["reward_shaping"] > drifted.metrics["reward_shaping"]

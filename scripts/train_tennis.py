@@ -78,8 +78,9 @@ def main() -> None:
         rate = float(metrics[f"eval/episode_{metric}"])
         xs.append(num_steps)
         rates.append(rate)
+        contact = float(metrics["eval/episode_interception"])
         print(
-            f"{num_steps:>11,} steps  {metric} {rate:6.1%}  "
+            f"{num_steps:>11,} steps  {metric} {rate:6.1%}  contact {contact:6.1%}  "
             f"reward {float(metrics['eval/episode_reward']):8.2f}",
             flush=True,
         )
