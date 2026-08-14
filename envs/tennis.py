@@ -70,7 +70,7 @@ _MJCF = """
     {net}
     <body name="paddle" pos="0 {paddle_y} {paddle_half_h}">
       <joint name="px" type="slide" axis="1 0 0" damping="2"/>
-      <joint name="py" type="slide" axis="0 1 0" damping="2"/>
+      <joint name="py" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
       {tilt_joint}
       <geom name="paddle" type="box" size="0.5 0.15 {paddle_half_h}" mass="1" solref="0.02 0.15"/>
     </body>

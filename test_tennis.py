@@ -195,3 +195,14 @@ def test_tilt_self_centers(env2):
     for _ in range(25):
         state = step(state, jp.zeros(3))
     assert jp.abs(state.obs[10]) < 0.3, "tilt should decay toward upright"
+
+
+def test_paddle_confined_to_receiver_zone(env2):
+    """The paddle cannot reach the net: run 10 concurrently caught the juggle
+    hack — pin the ball on the net, farm the contact bonus 30x per episode
+    (contact 3170%, returns crashed 79% -> 17%). A y joint limit ends it."""
+    state = env2.reset(jax.random.PRNGKey(0))
+    step = jax.jit(env2.step)
+    for _ in range(60):  # 1.2 s of full-speed charge at the net
+        state = step(state, jp.array([0.0, 1.0, 0.0]))
+    assert state.obs[7] < P2.paddle_y + 2.3, "paddle escaped the receiver zone"
