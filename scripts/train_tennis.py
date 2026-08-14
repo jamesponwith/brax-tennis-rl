@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # repo root for envs/
 from brax.io import html, model
 from brax.training.agents.ppo import train as ppo
 
-from envs.tennis import Tennis, TennisConfig
+from envs.tennis import PHASE2_CONFIG, Tennis
 
 FULL = {
     "num_timesteps": 8_000_000,
@@ -61,11 +61,7 @@ def main() -> None:
     phase = "phase2" if args.phase2 else "phase1"
     metric = "returned" if args.phase2 else "interception"
     target = 0.70 if args.phase2 else 0.95
-    env = (
-        Tennis(TennisConfig(net=True, serve_h_lo=1.8, serve_h_hi=3.0, paddle_half_h=1.0))
-        if args.phase2
-        else Tennis()
-    )
+    env = Tennis(PHASE2_CONFIG) if args.phase2 else Tennis()
     xs, rates = [], []
 
     def progress(num_steps: int, metrics: dict) -> None:

@@ -16,7 +16,7 @@ from brax.io import html, model
 from brax.training.acme import running_statistics
 from brax.training.agents.ppo import networks as ppo_networks
 
-from envs.tennis import Tennis, TennisConfig
+from envs.tennis import PHASE2_CONFIG, Tennis
 
 
 def main() -> None:
@@ -28,11 +28,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    env = (
-        Tennis(TennisConfig(net=True, serve_h_lo=1.8, serve_h_hi=3.0, paddle_half_h=1.0))
-        if args.phase2
-        else Tennis()
-    )
+    env = Tennis(PHASE2_CONFIG) if args.phase2 else Tennis()
     # mirror ppo.train's default network factory so saved params fit
     nets = ppo_networks.make_ppo_networks(
         env.observation_size,

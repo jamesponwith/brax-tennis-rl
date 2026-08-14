@@ -115,6 +115,10 @@ def predict_landing(pos: jp.ndarray, vel: jp.ndarray) -> jp.ndarray:
     return pos[:2] + vel[:2] * t
 
 
+# the canonical Phase 2 setup — trainer and renderer both import this
+PHASE2_CONFIG = TennisConfig(net=True, serve_h_lo=1.8, serve_h_hi=3.0, paddle_half_h=1.0)
+
+
 class Tennis(PipelineEnv):
     def __init__(self, config: TennisConfig | None = None):
         self.cfg = config = config or TennisConfig()
