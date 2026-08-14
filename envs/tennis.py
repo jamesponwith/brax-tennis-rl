@@ -59,6 +59,8 @@ class TennisConfig:
     target_bonus: float = 10.0  # scaled by proximity to (0, target_y)
     target_y: float = 5.0
     target_radius: float = 3.0
+    # Phase 3
+    rally: bool = False  # mirrored opponent paddle at +paddle_y (see envs/rally.py)
 
 
 # solref 0.02/0.15 per ADR 0002 — dampratio < 0.15 injects energy.
@@ -83,6 +85,7 @@ _MJCF = """
     <geom name="line_right" type="box" pos="5 0 0.005" size="0.04 6 0.005"
           contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
     {net}
+    {opponent}
     <body name="paddle" pos="0 {paddle_y} {paddle_half_h}">
       <joint name="px" type="slide" axis="1 0 0" damping="2"/>
       <joint name="py" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
@@ -99,6 +102,7 @@ _MJCF = """
   <actuator>
     <velocity joint="px" kv="20" ctrlrange="-10 10"/>
     <velocity joint="py" kv="20" ctrlrange="-10 10"/>
+    {opp_act}
     {tilt_act}
   </actuator>
 </mujoco>
@@ -111,6 +115,13 @@ _TILT_JOINT = (
     '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="0.5" stiffness="25"/>'
 )
 _TILT_ACT = '<velocity joint="ptilt" kv="5" ctrlrange="-6 6"/>'
+_OPPONENT = """<body name="opponent" pos="0 {opp_y} {paddle_half_h}">
+      <joint name="ox" type="slide" axis="1 0 0" damping="2"/>
+      <joint name="oy" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
+      <geom name="opponent" type="box" size="0.5 0.15 {paddle_half_h}" mass="1" solref="0.02 0.15" rgba="0.78 0.24 0.2 1"/>
+    </body>"""
+_OPP_ACT = """<velocity joint="ox" kv="20" ctrlrange="-10 10"/>
+    <velocity joint="oy" kv="20" ctrlrange="-10 10"/>"""
 
 
 def predict_landing(pos: jp.ndarray, vel: jp.ndarray) -> jp.ndarray:
@@ -137,11 +148,16 @@ class Tennis(PipelineEnv):
             serve_y=config.serve_y,
             ball_r=BALL_R,
             net=_NET.format(h2=config.net_height / 2, ty=config.target_y) if config.net else "",
+            opponent=_OPPONENT.format(opp_y=-config.paddle_y, paddle_half_h=config.paddle_half_h)
+            if config.rally
+            else "",
+            opp_act=_OPP_ACT if config.rally else "",
             tilt_joint=_TILT_JOINT if config.orientation else "",
             tilt_act=_TILT_ACT if config.orientation else "",
         )
         super().__init__(sys=mjcf.loads(xml), backend="mjx", n_frames=5)  # dt = 0.02
-        self._npad = 3 if config.orientation else 2  # paddle joint count
+        # learner paddle dofs come first in q; rally adds the opponent's two
+        self._npad = 4 if config.rally else (3 if config.orientation else 2)
 
     def reset(self, rng: jax.Array) -> State:
         cfg = self.cfg
