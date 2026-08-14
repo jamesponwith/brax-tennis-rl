@@ -59,6 +59,8 @@ class TennisConfig:
     target_bonus: float = 10.0  # scaled by proximity to (0, target_y)
     target_y: float = 5.0
     target_radius: float = 3.0
+    # Phase 3
+    rally: bool = False  # mirrored opponent paddle at +paddle_y (see envs/rally.py)
 
 
 # solref 0.02/0.15 per ADR 0002 — dampratio < 0.15 injects energy.
@@ -83,6 +85,7 @@ _MJCF = """
     <geom name="line_right" type="box" pos="5 0 0.005" size="0.04 6 0.005"
           contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
     {net}
+    {opponent}
     <body name="paddle" pos="0 {paddle_y} {paddle_half_h}">
       <joint name="px" type="slide" axis="1 0 0" damping="2"/>
       <joint name="py" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
@@ -99,6 +102,7 @@ _MJCF = """
   <actuator>
     <velocity joint="px" kv="20" ctrlrange="-10 10"/>
     <velocity joint="py" kv="20" ctrlrange="-10 10"/>
+    {opp_act}
     {tilt_act}
   </actuator>
 </mujoco>
@@ -111,6 +115,13 @@ _TILT_JOINT = (
     '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="0.5" stiffness="25"/>'
 )
 _TILT_ACT = '<velocity joint="ptilt" kv="5" ctrlrange="-6 6"/>'
+_OPPONENT = """<body name="opponent" pos="0 {opp_y} {paddle_half_h}">
+      <joint name="ox" type="slide" axis="1 0 0" damping="2"/>
+      <joint name="oy" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
+      <geom name="opponent" type="box" size="0.5 0.15 {paddle_half_h}" mass="1" solref="0.02 0.15" rgba="0.78 0.24 0.2 1"/>
+    </body>"""
+_OPP_ACT = """<velocity joint="ox" kv="20" ctrlrange="-10 10"/>
+    <velocity joint="oy" kv="20" ctrlrange="-10 10"/>"""
 
 
 def predict_landing(pos: jp.ndarray, vel: jp.ndarray) -> jp.ndarray:
@@ -137,11 +148,16 @@ class Tennis(PipelineEnv):
             serve_y=config.serve_y,
             ball_r=BALL_R,
             net=_NET.format(h2=config.net_height / 2, ty=config.target_y) if config.net else "",
+            opponent=_OPPONENT.format(opp_y=-config.paddle_y, paddle_half_h=config.paddle_half_h)
+            if config.rally
+            else "",
+            opp_act=_OPP_ACT if config.rally else "",
             tilt_joint=_TILT_JOINT if config.orientation else "",
             tilt_act=_TILT_ACT if config.orientation else "",
         )
         super().__init__(sys=mjcf.loads(xml), backend="mjx", n_frames=5)  # dt = 0.02
-        self._npad = 3 if config.orientation else 2  # paddle joint count
+        # learner paddle dofs come first in q; rally adds the opponent's two
+        self._npad = 4 if config.rally else (3 if config.orientation else 2)
 
     def reset(self, rng: jax.Array) -> State:
         cfg = self.cfg
@@ -192,13 +208,7 @@ class Tennis(PipelineEnv):
         shaping = jp.where(
             incoming, -cfg.shaping_scale * jp.linalg.norm(paddle_pos[:2] - landing), 0.0
         )
-        # box-aware proximity: a tall paddle face means center distance misleads
-        d = jp.abs(ball_pos - paddle_pos)
-        near = (
-            (d[0] < 0.5 + 2 * BALL_R)
-            & (d[1] < 0.15 + 2 * BALL_R + 0.1)
-            & (ball_pos[2] <= 2 * cfg.paddle_half_h + BALL_R)
-        )
+        _, near, _, _ = self._strike(ball_pos, ball_vel, paddle_pos, prev_vy)
         past = (ball_vel[1] < 0.0) & (ball_pos[1] < cfg.paddle_y - 0.5)
 
         if not cfg.net:  # Phase 1: episode ends at contact
@@ -212,27 +222,8 @@ class Tennis(PipelineEnv):
                 interception=jp.float32(contact),
             )
         else:  # Phase 2: play on after contact; score when the ball lands
-            # x-line shaping: x is force-free in flight, so where the ball
-            # crosses the paddle plane is exact across bounces — landing-point
-            # shaping parks the paddle where the ball touches down instead of
-            # where it can be struck (probe: 0/40 contacts for a perfect chaser)
-            x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
-                ball_vel[1], -0.1
-            )
-            # shape toward the intercept point (x-line, baseline) — without
-            # the y term the paddle drifts off the baseline with zero gradient
-            shaping = jp.where(
-                incoming,
-                -cfg.shaping_scale
-                * jp.hypot(paddle_pos[0] - x_at_plane, paddle_pos[1] - cfg.paddle_y),
-                0.0,
-            )
-            contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
-            # pace bonus: reward outgoing speed so swinging through the ball
-            # beats the safe-touch local optimum (flat-face rebounds rarely
-            # clear the net; the swing is what must be discovered)
-            reward_contact = jp.where(
-                contact, cfg.contact_bonus + 0.3 * jp.clip(ball_vel[1], 0.0, 10.0), 0.0
+            shaping, _, contact, reward_contact = self._strike(
+                ball_pos, ball_vel, paddle_pos, prev_vy
             )
             # a ball that dies rolling short would otherwise rattle out the clock
             dead = incoming & (ball_pos[2] <= BALL_R * 1.2) & (jp.abs(ball_vel[1]) < 1.5)
@@ -261,6 +252,34 @@ class Tennis(PipelineEnv):
         return state.replace(
             pipeline_state=ps, obs=self._obs(ps), reward=jp.float32(reward), done=done
         )
+
+    def _strike(self, ball_pos, ball_vel, paddle_pos, prev_vy):
+        """Shared Phase 2/3 incoming shaping + contact detection.
+
+        Shapes toward the intercept point (x-line, baseline); contact is the
+        memoryless vy sign flip near the face, paying the pace bonus.
+        """
+        cfg = self.cfg
+        incoming = ball_vel[1] <= 0.0
+        x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
+            ball_vel[1], -0.1
+        )
+        shaping = jp.where(
+            incoming,
+            -cfg.shaping_scale * jp.hypot(paddle_pos[0] - x_at_plane, paddle_pos[1] - cfg.paddle_y),
+            0.0,
+        )
+        d = jp.abs(ball_pos - paddle_pos)
+        near = (
+            (d[0] < 0.5 + 2 * BALL_R)
+            & (d[1] < 0.15 + 2 * BALL_R + 0.1)
+            & (ball_pos[2] <= 2 * cfg.paddle_half_h + BALL_R)
+        )
+        contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
+        reward_contact = jp.where(
+            contact, cfg.contact_bonus + 0.3 * jp.clip(ball_vel[1], 0.0, 10.0), 0.0
+        )
+        return shaping, near, contact, reward_contact
 
     def _obs(self, ps) -> jp.ndarray:
         parts = [ps.x.pos[1], ps.xd.vel[1], ps.x.pos[0][:2], ps.xd.vel[0][:2]]
