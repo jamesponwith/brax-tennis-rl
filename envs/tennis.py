@@ -87,7 +87,9 @@ _MJCF = """
 </mujoco>
 """
 _NET = '<geom name="net" type="box" pos="0 0 {h2}" size="6 0.02 {h2}" solref="0.02 0.5"/>'
-_TILT_JOINT = '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="0.5" stiffness="25"/>'
+_TILT_JOINT = (
+    '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="0.5" stiffness="25"/>'
+)
 _TILT_ACT = '<velocity joint="ptilt" kv="5" ctrlrange="-6 6"/>'
 
 
