@@ -66,17 +66,25 @@ _MJCF = """
 <mujoco>
   <option timestep="0.004" gravity="0 0 -9.81"/>
   <worldbody>
-    <geom name="court" type="plane" size="20 20 0.1" solref="0.02 0.15"/>
+    <geom name="court" type="plane" size="20 20 0.1" solref="0.02 0.15" rgba="0.16 0.42 0.25 1"/>
+    <geom name="line_near" type="box" pos="0 {paddle_y} 0.005" size="5 0.04 0.005"
+          contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
+    <geom name="line_far" type="box" pos="0 6 0.005" size="5 0.04 0.005"
+          contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
+    <geom name="line_left" type="box" pos="-5 0 0.005" size="0.04 6 0.005"
+          contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
+    <geom name="line_right" type="box" pos="5 0 0.005" size="0.04 6 0.005"
+          contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
     {net}
     <body name="paddle" pos="0 {paddle_y} {paddle_half_h}">
       <joint name="px" type="slide" axis="1 0 0" damping="2"/>
       <joint name="py" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
       {tilt_joint}
-      <geom name="paddle" type="box" size="0.5 0.15 {paddle_half_h}" mass="1" solref="0.02 0.15"/>
+      <geom name="paddle" type="box" size="0.5 0.15 {paddle_half_h}" mass="1" solref="0.02 0.15" rgba="0.16 0.32 0.75 1"/>
     </body>
     <body name="ball" pos="0 {serve_y} 1.5">
       <freejoint/>
-      <geom name="ball" type="sphere" size="{ball_r}" mass="0.057" solref="0.02 0.15"/>
+      <geom name="ball" type="sphere" size="{ball_r}" mass="0.057" solref="0.02 0.15" rgba="0.85 0.93 0.16 1"/>
     </body>
   </worldbody>
   <actuator>
@@ -86,7 +94,10 @@ _MJCF = """
   </actuator>
 </mujoco>
 """
-_NET = '<geom name="net" type="box" pos="0 0 {h2}" size="6 0.02 {h2}" solref="0.02 0.5"/>'
+_NET = """<geom name="net" type="box" pos="0 0 {h2}" size="6 0.02 {h2}" solref="0.02 0.5" rgba="0.92 0.94 0.96 0.85"/>
+    <geom name="post_l" type="box" pos="-6 0 {h2}" size="0.05 0.05 {h2}" contype="0" conaffinity="0" rgba="0.25 0.25 0.28 1"/>
+    <geom name="post_r" type="box" pos="6 0 {h2}" size="0.05 0.05 {h2}" contype="0" conaffinity="0" rgba="0.25 0.25 0.28 1"/>
+    <geom name="target_patch" type="box" pos="0 {ty} 0.004" size="1 1 0.003" contype="0" conaffinity="0" rgba="1 1 1 0.16"/>"""
 _TILT_JOINT = (
     '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="0.5" stiffness="25"/>'
 )
@@ -112,7 +123,7 @@ class Tennis(PipelineEnv):
             paddle_half_h=config.paddle_half_h,
             serve_y=config.serve_y,
             ball_r=BALL_R,
-            net=_NET.format(h2=config.net_height / 2) if config.net else "",
+            net=_NET.format(h2=config.net_height / 2, ty=config.target_y) if config.net else "",
             tilt_joint=_TILT_JOINT if config.orientation else "",
             tilt_act=_TILT_ACT if config.orientation else "",
         )
