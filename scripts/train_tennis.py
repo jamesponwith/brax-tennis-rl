@@ -35,11 +35,12 @@ FULL = {
     "num_envs": 1024,
     "batch_size": 512,
 }
+# ponytail: no orientation — bisection showed the tilt action channel pins PPO
+# at the random baseline (3 flat runs), while the flat face reaches the return
+# target in 2M steps. Tilt / flat-through-lob becomes a Phase 3 curriculum.
 PHASE2 = {
-    "num_timesteps": 20_000_000,  # the return is a harder credit assignment
-    "num_evals": 25,
-    "episode_length": 300,  # 6 s — room for the return flight
-    "entropy_cost": 2e-2,  # keep exploring past the intercept-only local optimum
+    "num_timesteps": 10_000_000,
+    "num_evals": 20,
 }
 SMOKE = {
     "num_timesteps": 100_000,
@@ -64,11 +65,7 @@ def main() -> None:
     metric = "returned" if args.phase2 else "interception"
     target = 0.70 if args.phase2 else 0.95
     env = (
-        Tennis(
-            TennisConfig(
-                net=True, orientation=True, serve_h_lo=1.8, serve_h_hi=3.0, paddle_half_h=1.0
-            )
-        )
+        Tennis(TennisConfig(net=True, serve_h_lo=1.8, serve_h_hi=3.0, paddle_half_h=1.0))
         if args.phase2
         else Tennis()
     )
