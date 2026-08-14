@@ -14,6 +14,11 @@ Status: **Phase 1 complete — 95.2% interception over 1000 random serves**
 Reproduce: `uv run python scripts/train_tennis.py` (~20 min CPU), then open
 `out/phase1_rollout.html` to watch the paddle slide to meet serves.
 
+Phase 2 (`--phase2`: net, target region, paddle tilt) is in progress — the
+20M-step run wants a Colab GPU (per SPEC's compute budget), not a laptop:
+clone the repo in Colab, `pip install uv`, then
+`uv run python scripts/train_tennis.py --phase2`.
+
 Backend: **MJX** — see [ADR 0002](docs/adr/0002-backend-choice.md) for the
 bounce-fidelity evidence (and why `positional` was disqualified outright).
 Phase 0 notebook: [`notebooks/phase0_ant.ipynb`](notebooks/phase0_ant.ipynb)

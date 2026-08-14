@@ -185,3 +185,13 @@ def test_shaping_anchors_paddle_to_baseline(env2):
     home = jax.jit(env2.step)(_state2(env2, **ball), jp.zeros(3))
     drifted = jax.jit(env2.step)(_state2(env2, **ball, paddle=(0.0, 3.0, 0.0)), jp.zeros(3))
     assert home.metrics["reward_shaping"] > drifted.metrics["reward_shaping"]
+
+
+def test_tilt_self_centers(env2):
+    """An untouched tilted paddle springs back upright — random exploration
+    laying the face flat killed the contact gradient (runs 2 and 3)."""
+    state = _state2(env2, (0.0, 5.0, 2.0), paddle=(0.0, 0.0, 1.0))  # tilted ~57 deg
+    step = jax.jit(env2.step)
+    for _ in range(25):
+        state = step(state, jp.zeros(3))
+    assert jp.abs(state.obs[10]) < 0.3, "tilt should decay toward upright"
