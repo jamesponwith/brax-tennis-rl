@@ -65,7 +65,14 @@ class TennisConfig:
 _MJCF = """
 <mujoco>
   <option timestep="0.004" gravity="0 0 -9.81"/>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.53 0.70 0.85" rgb2="0.85 0.91 0.96" width="256" height="256"/>
+  </asset>
+  <visual>
+    <headlight ambient="0.45 0.45 0.45" diffuse="0.7 0.7 0.7" specular="0.1 0.1 0.1"/>
+  </visual>
   <worldbody>
+    <light pos="0 2 14" dir="0 -0.1 -1" diffuse="0.85 0.85 0.85"/>
     <geom name="court" type="plane" size="20 20 0.1" solref="0.02 0.15" rgba="0.16 0.42 0.25 1"/>
     <geom name="line_near" type="box" pos="0 {paddle_y} 0.005" size="5 0.04 0.005"
           contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
@@ -85,6 +92,8 @@ _MJCF = """
     <body name="ball" pos="0 {serve_y} 1.5">
       <freejoint/>
       <geom name="ball" type="sphere" size="{ball_r}" mass="0.057" solref="0.02 0.15" rgba="0.85 0.93 0.16 1"/>
+      <geom name="ball_halo" type="sphere" size="0.09" contype="0" conaffinity="0" mass="0"
+            rgba="0.95 0.98 0.25 0.45"/>
     </body>
   </worldbody>
   <actuator>
