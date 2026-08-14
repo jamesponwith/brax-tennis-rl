@@ -63,7 +63,11 @@ def main() -> None:
     phase = "phase2" if args.phase2 else "phase1"
     metric = "returned" if args.phase2 else "interception"
     target = 0.70 if args.phase2 else 0.95
-    env = Tennis(TennisConfig(net=True, orientation=True)) if args.phase2 else Tennis()
+    env = (
+        Tennis(TennisConfig(net=True, orientation=True, serve_h_lo=1.8, serve_h_hi=3.0))
+        if args.phase2
+        else Tennis()
+    )
     xs, rates = [], []
 
     def progress(num_steps: int, metrics: dict) -> None:

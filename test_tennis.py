@@ -52,7 +52,8 @@ def test_serve_distribution(env):
 
 
 def test_contact_gives_bonus_and_ends_episode(env):
-    state = _state_with(env, ball_pos=(0.0, CFG.paddle_y, 0.5))  # inside the paddle box
+    # ball just in front of the face, flying into it — one step spans the impact
+    state = _state_with(env, ball_pos=(0.0, CFG.paddle_y + 0.3, 0.5), ball_vel=(0, -8, 0))
     nxt = jax.jit(env.step)(state, jp.zeros(2))
     assert nxt.metrics["reward_contact"] == CFG.contact_bonus
     assert nxt.metrics["interception"] == 1.0
