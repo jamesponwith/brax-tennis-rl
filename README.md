@@ -6,7 +6,13 @@ player: no humanoid, no articulated arm — a box that learns to slide, meet a
 served ball, and put it back over the net.
 
 Full design, phase gates, and kill-switch deliverables: [SPEC.md](SPEC.md).
-Status: Phase 0.
+Status: **Phase 1 complete — 95.2% interception over 1000 random serves**
+(target ≥95%), trained with stock PPO in 9.3M env steps on a laptop CPU.
+
+![Phase 1 training curve: interception rate climbing from 11% to a stable ~95% plateau](docs/phase1_curve.png)
+
+Reproduce: `uv run python scripts/train_tennis.py` (~20 min CPU), then open
+`out/phase1_rollout.html` to watch the paddle slide to meet serves.
 
 Backend: **MJX** — see [ADR 0002](docs/adr/0002-backend-choice.md) for the
 bounce-fidelity evidence (and why `positional` was disqualified outright).
