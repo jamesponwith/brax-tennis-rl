@@ -36,7 +36,10 @@ Phase 0 notebook: [`notebooks/phase0_ant.ipynb`](notebooks/phase0_ant.ipynb)
 - **Phase 0** — validate the stock training loop (PPO on `ant`, Colab)
 - **Phase 1** — ball interception: ≥95% of random serves met
 - **Phase 2** — the return: ≥70% of serves returned into the far court
-- **Phase 3** (stretch) — rally self-play
+- **Phase 3** (stretch) — rally self-play: **two league generations trained** — mean rally
+  length grew 1.77 → ~1.95 crossings (probe baseline 1.80; each generation opens stronger
+  against its predecessor). See [docs/phase3_curve.png](docs/phase3_curve.png); league
+  continuation is open-ended
 
 Built inside the [personal agentic flywheel](https://github.com/jamesponwith/agentic-flywheel)
 from [flywheel-template-py](https://github.com/jamesponwith/flywheel-template-py) —
