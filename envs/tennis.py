@@ -1,16 +1,26 @@
-"""Tennis interception env — Phase 1 (SPEC).
+"""Tennis env — Phase 1 (interception) and Phase 2 (the return), by config.
 
-The paddle IS the player: an actuated box sliding in x/y at the baseline.
-A ball is served from the far half within a randomized cone; the agent's job
-is to be where the ball arrives.
+The paddle IS the player: an actuated box sliding in x/y at the baseline,
+optionally with a tilt hinge (Phase 2) for flat-through-lob control.
 
-Observation (10): ball pos (3), ball vel (3), paddle pos (2), paddle vel (2).
-Action (2): paddle target velocity in x/y, [-1, 1] scaled by max_paddle_speed.
-Reward: -distance from paddle to the ball's predicted landing point each step
-(dense shaping), +contact_bonus on interception. Per-term components live in
-`state.metrics` from day one so reward hacks show up in curves (SPEC risk).
-Episode ends on contact or ball-past-paddle; timeout is the trainer's
-episode_length truncation.
+Phase 1 (net=False): intercept the serve. Obs (10): ball pos(3) + vel(3),
+paddle pos(2) + vel(2). Action (2): target velocity. Reward: -distance from
+paddle to the ball's predicted landing point each step, +bonus on contact.
+Episode ends on contact or ball-past-paddle.
+
+Phase 2 (net=True, orientation=True): return the serve over the net into a
+target region. Obs (12): + paddle tilt angle and angular velocity. Action
+(3): + tilt target velocity. The episode continues past contact; return
+detection is MEMORYLESS — serves always fly -y, so ball_vy > 0 means "the
+paddle sent it back" (brax's AutoResetWrapper leaks custom info flags across
+resets, so episode memory is a trap). A netted ball comes back with vy < 0
+and is simply in play again. Reward: Phase 1 shaping while incoming, +contact
+bonus on the vy sign flip at the paddle, +return bonus when the ball lands
+beyond the net, +target bonus scaled by proximity to the target center.
+
+Per-term reward components live in `state.metrics` from day one so reward
+hacks show up in curves (SPEC risk). Metrics must be updated in place —
+training wrappers add their own keys.
 """
 
 from dataclasses import dataclass
@@ -26,8 +36,6 @@ BALL_R = 0.033
 
 @dataclass(frozen=True)
 class TennisConfig:
-    """Phase 1 knobs. Net / target region / paddle orientation arrive in Phase 2."""
-
     court_half_w: float = 4.0  # lateral serve spread (m)
     paddle_y: float = -6.0  # baseline the paddle lives on
     serve_y: float = 8.0  # where serves spawn
@@ -42,6 +50,14 @@ class TennisConfig:
     contact_bonus: float = 10.0
     contact_dist: float = 0.6  # ponytail: proximity check, not MJX contact parsing
     shaping_scale: float = 0.1  # per-step weight on -distance-to-landing
+    # Phase 2
+    net: bool = False
+    orientation: bool = False
+    net_height: float = 0.9
+    return_bonus: float = 10.0  # ball lands beyond the net
+    target_bonus: float = 10.0  # scaled by proximity to (0, target_y)
+    target_y: float = 5.0
+    target_radius: float = 3.0
 
 
 # solref 0.02/0.15 per ADR 0002 — dampratio < 0.15 injects energy.
@@ -50,9 +66,11 @@ _MJCF = """
   <option timestep="0.004" gravity="0 0 -9.81"/>
   <worldbody>
     <geom name="court" type="plane" size="20 20 0.1" solref="0.02 0.15"/>
+    {net}
     <body name="paddle" pos="0 {paddle_y} 0.5">
       <joint name="px" type="slide" axis="1 0 0" damping="2"/>
       <joint name="py" type="slide" axis="0 1 0" damping="2"/>
+      {tilt_joint}
       <geom name="paddle" type="box" size="0.5 0.15 0.5" mass="1"/>
     </body>
     <body name="ball" pos="0 {serve_y} 1.5">
@@ -63,9 +81,13 @@ _MJCF = """
   <actuator>
     <velocity joint="px" kv="20" ctrlrange="-10 10"/>
     <velocity joint="py" kv="20" ctrlrange="-10 10"/>
+    {tilt_act}
   </actuator>
 </mujoco>
 """
+_NET = '<geom name="net" type="box" pos="0 0 {h2}" size="6 0.02 {h2}" solref="0.02 0.5"/>'
+_TILT_JOINT = '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="0.5"/>'
+_TILT_ACT = '<velocity joint="ptilt" kv="5" ctrlrange="-6 6"/>'
 
 
 def predict_landing(pos: jp.ndarray, vel: jp.ndarray) -> jp.ndarray:
@@ -82,10 +104,16 @@ def predict_landing(pos: jp.ndarray, vel: jp.ndarray) -> jp.ndarray:
 class Tennis(PipelineEnv):
     def __init__(self, config: TennisConfig | None = None):
         self.cfg = config = config or TennisConfig()
-        sys = mjcf.loads(
-            _MJCF.format(paddle_y=config.paddle_y, serve_y=config.serve_y, ball_r=BALL_R)
+        xml = _MJCF.format(
+            paddle_y=config.paddle_y,
+            serve_y=config.serve_y,
+            ball_r=BALL_R,
+            net=_NET.format(h2=config.net_height / 2) if config.net else "",
+            tilt_joint=_TILT_JOINT if config.orientation else "",
+            tilt_act=_TILT_ACT if config.orientation else "",
         )
-        super().__init__(sys=sys, backend="mjx", n_frames=5)  # dt = 0.02
+        super().__init__(sys=mjcf.loads(xml), backend="mjx", n_frames=5)  # dt = 0.02
+        self._npad = 3 if config.orientation else 2  # paddle joint count
 
     def reset(self, rng: jax.Array) -> State:
         cfg = self.cfg
@@ -97,45 +125,89 @@ class Tennis(PipelineEnv):
         ang = jax.random.uniform(r_ang, minval=-cone, maxval=cone)
         vz = jax.random.uniform(r_vz, minval=cfg.serve_vz_lo, maxval=cfg.serve_vz_hi)
 
-        # q: [paddle_x, paddle_y_offset, ball_pos(3), ball_quat(4)]
         q = jp.concatenate(
-            [jp.zeros(2), jp.array([x0, cfg.serve_y, h]), jp.array([1.0, 0.0, 0.0, 0.0])]
+            [jp.zeros(self._npad), jp.array([x0, cfg.serve_y, h]), jp.array([1.0, 0.0, 0.0, 0.0])]
         )
-        # qd: [paddle(2), ball_lin(3), ball_ang(3)]; serve flies toward the paddle (-y)
         vxy = speed * jp.array([jp.sin(ang), -jp.cos(ang)])
-        qd = jp.concatenate([jp.zeros(2), vxy, jp.array([vz]), jp.zeros(3)])
+        if cfg.net:
+            # a serve must clear the net or it rebounds with vy > 0 and the
+            # memoryless return detector counts a phantom return — caught by
+            # the per-term metrics on eval #1 (random policy "returned" 85%)
+            t_net = cfg.serve_y / (speed * jp.cos(ang))
+            vz_min = (cfg.net_height + 0.15 - h) / t_net + 0.5 * G * t_net
+            vz = jp.maximum(vz, vz_min)
+        qd = jp.concatenate([jp.zeros(self._npad), vxy, jp.array([vz]), jp.zeros(3)])
 
         ps = self.pipeline_init(q, qd)
         metrics = {"reward_shaping": 0.0, "reward_contact": 0.0, "interception": 0.0}
+        if cfg.net:
+            metrics |= {"reward_return": 0.0, "reward_target": 0.0, "returned": 0.0}
         return State(ps, self._obs(ps), jp.float32(0.0), jp.float32(0.0), metrics)
 
     def step(self, state: State, action: jax.Array) -> State:
         cfg = self.cfg
-        ctrl = jp.clip(action, -1.0, 1.0) * cfg.max_paddle_speed
+        prev_vy = state.obs[4]
+        # slide channels in m/s, tilt channel (if any) in rad/s
+        scale = (
+            jp.array([cfg.max_paddle_speed, cfg.max_paddle_speed, 6.0])
+            if cfg.orientation
+            else cfg.max_paddle_speed
+        )
+        ctrl = jp.clip(action, -1.0, 1.0) * scale
         ps = self.pipeline_step(state.pipeline_state, ctrl)
 
         ball_pos, ball_vel = ps.x.pos[1], ps.xd.vel[1]
         paddle_pos = ps.x.pos[0]
 
+        incoming = ball_vel[1] <= 0.0  # serves fly -y; vy > 0 only after a paddle hit
         landing = predict_landing(ball_pos, ball_vel)
-        shaping = -cfg.shaping_scale * jp.linalg.norm(paddle_pos[:2] - landing)
-        contact = jp.linalg.norm(ball_pos - paddle_pos) < cfg.contact_dist
-        past = ball_pos[1] < cfg.paddle_y - 0.5
-
-        reward_contact = jp.where(contact, cfg.contact_bonus, 0.0)
-        reward = shaping + reward_contact
-        done = jp.float32(contact | past)
-
-        # in-place update keeps keys the training wrappers add to metrics
-        state.metrics.update(
-            reward_shaping=shaping,
-            reward_contact=reward_contact,
-            interception=jp.float32(contact),
+        shaping = jp.where(
+            incoming, -cfg.shaping_scale * jp.linalg.norm(paddle_pos[:2] - landing), 0.0
         )
+        near = jp.linalg.norm(ball_pos - paddle_pos) < cfg.contact_dist
+        past = (ball_vel[1] < 0.0) & (ball_pos[1] < cfg.paddle_y - 0.5)
+
+        if not cfg.net:  # Phase 1: episode ends at contact
+            contact = near
+            reward_contact = jp.where(contact, cfg.contact_bonus, 0.0)
+            reward = shaping + reward_contact
+            done = jp.float32(contact | past)
+            state.metrics.update(
+                reward_shaping=shaping,
+                reward_contact=reward_contact,
+                interception=jp.float32(contact),
+            )
+        else:  # Phase 2: play on after contact; score when the ball lands
+            contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
+            reward_contact = jp.where(contact, cfg.contact_bonus, 0.0)
+            landed = (ball_pos[2] <= BALL_R * 1.2) & (ball_vel[2] <= 0.0) & (ball_vel[1] > 0.0)
+            crossed = ball_pos[1] > 0.3  # landing beyond the net line
+            returned = landed & crossed
+            reward_return = jp.where(returned, cfg.return_bonus, 0.0)
+            prox = jp.clip(
+                1.0
+                - jp.linalg.norm(ball_pos[:2] - jp.array([0.0, cfg.target_y])) / cfg.target_radius,
+                0.0,
+                1.0,
+            )
+            reward_target = jp.where(returned, cfg.target_bonus * prox, 0.0)
+            reward = shaping + reward_contact + reward_return + reward_target
+            done = jp.float32(landed | past)
+            state.metrics.update(
+                reward_shaping=shaping,
+                reward_contact=reward_contact,
+                interception=jp.float32(contact),
+                reward_return=reward_return,
+                reward_target=reward_target,
+                returned=jp.float32(returned),
+            )
+
         return state.replace(
             pipeline_state=ps, obs=self._obs(ps), reward=jp.float32(reward), done=done
         )
 
     def _obs(self, ps) -> jp.ndarray:
-        # ball pos(3) + vel(3), paddle xy pos(2) + xy vel(2)
-        return jp.concatenate([ps.x.pos[1], ps.xd.vel[1], ps.x.pos[0][:2], ps.xd.vel[0][:2]])
+        parts = [ps.x.pos[1], ps.xd.vel[1], ps.x.pos[0][:2], ps.xd.vel[0][:2]]
+        if self.cfg.orientation:
+            parts.append(jp.array([ps.q[2], ps.qd[2]]))  # tilt angle, angular velocity
+        return jp.concatenate(parts)
