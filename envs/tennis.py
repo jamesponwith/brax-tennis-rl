@@ -208,13 +208,7 @@ class Tennis(PipelineEnv):
         shaping = jp.where(
             incoming, -cfg.shaping_scale * jp.linalg.norm(paddle_pos[:2] - landing), 0.0
         )
-        # box-aware proximity: a tall paddle face means center distance misleads
-        d = jp.abs(ball_pos - paddle_pos)
-        near = (
-            (d[0] < 0.5 + 2 * BALL_R)
-            & (d[1] < 0.15 + 2 * BALL_R + 0.1)
-            & (ball_pos[2] <= 2 * cfg.paddle_half_h + BALL_R)
-        )
+        _, near, _, _ = self._strike(ball_pos, ball_vel, paddle_pos, prev_vy)
         past = (ball_vel[1] < 0.0) & (ball_pos[1] < cfg.paddle_y - 0.5)
 
         if not cfg.net:  # Phase 1: episode ends at contact
@@ -228,27 +222,8 @@ class Tennis(PipelineEnv):
                 interception=jp.float32(contact),
             )
         else:  # Phase 2: play on after contact; score when the ball lands
-            # x-line shaping: x is force-free in flight, so where the ball
-            # crosses the paddle plane is exact across bounces — landing-point
-            # shaping parks the paddle where the ball touches down instead of
-            # where it can be struck (probe: 0/40 contacts for a perfect chaser)
-            x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
-                ball_vel[1], -0.1
-            )
-            # shape toward the intercept point (x-line, baseline) — without
-            # the y term the paddle drifts off the baseline with zero gradient
-            shaping = jp.where(
-                incoming,
-                -cfg.shaping_scale
-                * jp.hypot(paddle_pos[0] - x_at_plane, paddle_pos[1] - cfg.paddle_y),
-                0.0,
-            )
-            contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
-            # pace bonus: reward outgoing speed so swinging through the ball
-            # beats the safe-touch local optimum (flat-face rebounds rarely
-            # clear the net; the swing is what must be discovered)
-            reward_contact = jp.where(
-                contact, cfg.contact_bonus + 0.3 * jp.clip(ball_vel[1], 0.0, 10.0), 0.0
+            shaping, _, contact, reward_contact = self._strike(
+                ball_pos, ball_vel, paddle_pos, prev_vy
             )
             # a ball that dies rolling short would otherwise rattle out the clock
             dead = incoming & (ball_pos[2] <= BALL_R * 1.2) & (jp.abs(ball_vel[1]) < 1.5)
@@ -277,6 +252,34 @@ class Tennis(PipelineEnv):
         return state.replace(
             pipeline_state=ps, obs=self._obs(ps), reward=jp.float32(reward), done=done
         )
+
+    def _strike(self, ball_pos, ball_vel, paddle_pos, prev_vy):
+        """Shared Phase 2/3 incoming shaping + contact detection.
+
+        Shapes toward the intercept point (x-line, baseline); contact is the
+        memoryless vy sign flip near the face, paying the pace bonus.
+        """
+        cfg = self.cfg
+        incoming = ball_vel[1] <= 0.0
+        x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
+            ball_vel[1], -0.1
+        )
+        shaping = jp.where(
+            incoming,
+            -cfg.shaping_scale * jp.hypot(paddle_pos[0] - x_at_plane, paddle_pos[1] - cfg.paddle_y),
+            0.0,
+        )
+        d = jp.abs(ball_pos - paddle_pos)
+        near = (
+            (d[0] < 0.5 + 2 * BALL_R)
+            & (d[1] < 0.15 + 2 * BALL_R + 0.1)
+            & (ball_pos[2] <= 2 * cfg.paddle_half_h + BALL_R)
+        )
+        contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
+        reward_contact = jp.where(
+            contact, cfg.contact_bonus + 0.3 * jp.clip(ball_vel[1], 0.0, 10.0), 0.0
+        )
+        return shaping, near, contact, reward_contact
 
     def _obs(self, ps) -> jp.ndarray:
         parts = [ps.x.pos[1], ps.xd.vel[1], ps.x.pos[0][:2], ps.xd.vel[0][:2]]

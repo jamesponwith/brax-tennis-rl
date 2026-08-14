@@ -65,7 +65,7 @@ class RallyTennis(Tennis):
                 ps0.xd.vel[0][:2] * _MIRROR2,
             ]
         )
-        opp_act = jax.lax.stop_gradient(self._opp_fn(opp_obs))
+        opp_act = self._opp_fn(opp_obs)
         opp_ctrl = jp.clip(opp_act, -1.0, 1.0) * _MIRROR2 * cfg.max_paddle_speed
         ctrl = jp.concatenate([jp.clip(action, -1.0, 1.0) * cfg.max_paddle_speed, opp_ctrl])
         ps = self.pipeline_step(ps0, ctrl)
@@ -73,25 +73,7 @@ class RallyTennis(Tennis):
         ball_pos, ball_vel = ps.x.pos[2], ps.xd.vel[2]
         paddle_pos = ps.x.pos[1]
 
-        incoming = ball_vel[1] <= 0.0
-        x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
-            ball_vel[1], -0.1
-        )
-        shaping = jp.where(
-            incoming,
-            -cfg.shaping_scale * jp.hypot(paddle_pos[0] - x_at_plane, paddle_pos[1] - cfg.paddle_y),
-            0.0,
-        )
-        d = jp.abs(ball_pos - paddle_pos)
-        near = (
-            (d[0] < 0.5 + 2 * BALL_R)
-            & (d[1] < 0.15 + 2 * BALL_R + 0.1)
-            & (ball_pos[2] <= 2 * cfg.paddle_half_h + BALL_R)
-        )
-        contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
-        reward_contact = jp.where(
-            contact, cfg.contact_bonus + 0.3 * jp.clip(ball_vel[1], 0.0, 10.0), 0.0
-        )
+        shaping, _, contact, reward_contact = self._strike(ball_pos, ball_vel, paddle_pos, prev_vy)
 
         crossing = jp.sign(ball_pos[1]) != jp.sign(prev_ball_y)
         learner_cross = crossing & (ball_vel[1] > 0.0)
