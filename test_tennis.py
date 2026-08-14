@@ -100,7 +100,7 @@ def test_action_moves_paddle(env):
 
 # ---- Phase 2 ----
 
-P2 = TennisConfig(net=True, orientation=True)
+P2 = TennisConfig(net=True, orientation=True, serve_h_lo=1.8, serve_h_hi=3.0, paddle_half_h=1.0)
 
 
 @pytest.fixture(scope="module")
