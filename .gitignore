@@ -13,3 +13,4 @@ notebooks/ant_params
 notebooks/*.html
 notebooks/*.png
 out/
+.DS_Store

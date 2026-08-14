@@ -49,6 +49,7 @@ class TennisConfig:
     max_paddle_speed: float = 8.0  # m/s at |action| = 1
     contact_bonus: float = 10.0
     contact_dist: float = 0.6  # ponytail: proximity check, not MJX contact parsing
+    paddle_half_h: float = 0.5  # Phase 2 raises this: lobbed serves hop a short paddle
     shaping_scale: float = 0.1  # per-step weight on -distance-to-landing
     # Phase 2
     net: bool = False
@@ -67,11 +68,11 @@ _MJCF = """
   <worldbody>
     <geom name="court" type="plane" size="20 20 0.1" solref="0.02 0.15"/>
     {net}
-    <body name="paddle" pos="0 {paddle_y} 0.5">
+    <body name="paddle" pos="0 {paddle_y} {paddle_half_h}">
       <joint name="px" type="slide" axis="1 0 0" damping="2"/>
       <joint name="py" type="slide" axis="0 1 0" damping="2"/>
       {tilt_joint}
-      <geom name="paddle" type="box" size="0.5 0.15 0.5" mass="1"/>
+      <geom name="paddle" type="box" size="0.5 0.15 {paddle_half_h}" mass="1" solref="0.02 0.15"/>
     </body>
     <body name="ball" pos="0 {serve_y} 1.5">
       <freejoint/>
@@ -106,6 +107,7 @@ class Tennis(PipelineEnv):
         self.cfg = config = config or TennisConfig()
         xml = _MJCF.format(
             paddle_y=config.paddle_y,
+            paddle_half_h=config.paddle_half_h,
             serve_y=config.serve_y,
             ball_r=BALL_R,
             net=_NET.format(h2=config.net_height / 2) if config.net else "",
@@ -164,7 +166,13 @@ class Tennis(PipelineEnv):
         shaping = jp.where(
             incoming, -cfg.shaping_scale * jp.linalg.norm(paddle_pos[:2] - landing), 0.0
         )
-        near = jp.linalg.norm(ball_pos - paddle_pos) < cfg.contact_dist
+        # box-aware proximity: a tall paddle face means center distance misleads
+        d = jp.abs(ball_pos - paddle_pos)
+        near = (
+            (d[0] < 0.5 + 2 * BALL_R)
+            & (d[1] < 0.15 + 2 * BALL_R + 0.1)
+            & (ball_pos[2] <= 2 * cfg.paddle_half_h + BALL_R)
+        )
         past = (ball_vel[1] < 0.0) & (ball_pos[1] < cfg.paddle_y - 0.5)
 
         if not cfg.net:  # Phase 1: episode ends at contact
@@ -178,8 +186,20 @@ class Tennis(PipelineEnv):
                 interception=jp.float32(contact),
             )
         else:  # Phase 2: play on after contact; score when the ball lands
+            # x-line shaping: x is force-free in flight, so where the ball
+            # crosses the paddle plane is exact across bounces — landing-point
+            # shaping parks the paddle where the ball touches down instead of
+            # where it can be struck (probe: 0/40 contacts for a perfect chaser)
+            x_at_plane = ball_pos[0] + ball_vel[0] * (cfg.paddle_y - ball_pos[1]) / jp.minimum(
+                ball_vel[1], -0.1
+            )
+            shaping = jp.where(
+                incoming, -cfg.shaping_scale * jp.abs(paddle_pos[0] - x_at_plane), 0.0
+            )
             contact = (prev_vy < 0.0) & (ball_vel[1] > 0.0) & near
             reward_contact = jp.where(contact, cfg.contact_bonus, 0.0)
+            # a ball that dies rolling short would otherwise rattle out the clock
+            dead = incoming & (ball_pos[2] <= BALL_R * 1.2) & (jp.abs(ball_vel[1]) < 1.5)
             landed = (ball_pos[2] <= BALL_R * 1.2) & (ball_vel[2] <= 0.0) & (ball_vel[1] > 0.0)
             crossed = ball_pos[1] > 0.3  # landing beyond the net line
             returned = landed & crossed
@@ -192,7 +212,7 @@ class Tennis(PipelineEnv):
             )
             reward_target = jp.where(returned, cfg.target_bonus * prox, 0.0)
             reward = shaping + reward_contact + reward_return + reward_target
-            done = jp.float32(landed | past)
+            done = jp.float32(landed | past | dead)
             state.metrics.update(
                 reward_shaping=shaping,
                 reward_contact=reward_contact,
