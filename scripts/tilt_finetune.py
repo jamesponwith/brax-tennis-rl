@@ -35,11 +35,13 @@ def expand_params(params, obs_add: int = 2):
         pad = jp.zeros(obs_add) if arr.ndim == 1 else None
         return jp.concatenate([arr, pad]) if pad is not None else arr
 
-    # new dims get std=1: summed_variance must scale with the running count
+    # new dims get std=1: summed_variance must equal the running count,
+    # which brax wraps in a UInt64 — recover it from an existing dim instead
+    count_equiv = norm.summed_variance[0] / jp.maximum(norm.std[0] ** 2, 1e-8)
     norm = norm.replace(
         mean=grow_obs(norm.mean),
         std=jp.concatenate([norm.std, jp.ones(obs_add)]),
-        summed_variance=jp.concatenate([norm.summed_variance, jp.full(obs_add, norm.count)]),
+        summed_variance=jp.concatenate([norm.summed_variance, jp.full(obs_add, count_equiv)]),
     )
 
     def grow_input(net):

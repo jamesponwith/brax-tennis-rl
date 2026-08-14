@@ -41,6 +41,10 @@ class RallyTennis(Tennis):
         super().__init__(config or RALLY_CONFIG)
         self._opp_fn: Callable | None = None
 
+    @property
+    def action_size(self) -> int:
+        return 2  # learner paddle only — the opponent's ctrl is driven internally
+
     def set_opponent(self, fn: Callable) -> None:
         """fn: (obs10 in the opponent's mirrored frame) -> act2 in [-1, 1]."""
         self._opp_fn = fn

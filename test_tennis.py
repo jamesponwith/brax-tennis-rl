@@ -196,7 +196,7 @@ def test_tilt_self_centers(env2):
     laying the face flat killed the contact gradient (runs 2 and 3)."""
     state = _state2(env2, (0.0, 5.0, 2.0), paddle=(0.0, 0.0, 1.0))  # tilted ~57 deg
     step = jax.jit(env2.step)
-    for _ in range(25):
+    for _ in range(40):  # 0.8 s — damping 6 centers without overshoot, a touch slower
         state = step(state, jp.zeros(3))
     assert jp.abs(state.obs[10]) < 0.3, "tilt should decay toward upright"
 

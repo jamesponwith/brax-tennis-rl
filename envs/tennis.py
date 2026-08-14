@@ -86,7 +86,7 @@ _MJCF = """
           contype="0" conaffinity="0" rgba="1 1 1 0.9"/>
     {net}
     {opponent}
-    <body name="paddle" pos="0 {paddle_y} {paddle_half_h}">
+    <body name="paddle" pos="0 {paddle_y} {paddle_z}">
       <joint name="px" type="slide" axis="1 0 0" damping="2"/>
       <joint name="py" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
       {tilt_joint}
@@ -112,10 +112,10 @@ _NET = """<geom name="net" type="box" pos="0 0 {h2}" size="6 0.02 {h2}" solref="
     <geom name="post_r" type="box" pos="6 0 {h2}" size="0.05 0.05 {h2}" contype="0" conaffinity="0" rgba="0.25 0.25 0.28 1"/>
     <geom name="target_patch" type="box" pos="0 {ty} 0.004" size="1 1 0.003" contype="0" conaffinity="0" rgba="1 1 1 0.16"/>"""
 _TILT_JOINT = (
-    '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="0.5" stiffness="25"/>'
+    '<joint name="ptilt" type="hinge" axis="1 0 0" range="-60 60" damping="6" stiffness="25"/>'
 )
 _TILT_ACT = '<velocity joint="ptilt" kv="5" ctrlrange="-6 6"/>'
-_OPPONENT = """<body name="opponent" pos="0 {opp_y} {paddle_half_h}">
+_OPPONENT = """<body name="opponent" pos="0 {opp_y} {paddle_z}">
       <joint name="ox" type="slide" axis="1 0 0" damping="2"/>
       <joint name="oy" type="slide" axis="0 1 0" damping="2" range="-2 2"/>
       <geom name="opponent" type="box" size="0.5 0.15 {paddle_half_h}" mass="1" solref="0.02 0.15" rgba="0.78 0.24 0.2 1"/>
@@ -145,10 +145,17 @@ class Tennis(PipelineEnv):
         xml = _MJCF.format(
             paddle_y=config.paddle_y,
             paddle_half_h=config.paddle_half_h,
+            # 2cm float: flush on the court, hinge micro-pitch digs the bottom
+            # edge in and floor friction JAMS the slides under jittery ctrl
+            paddle_z=config.paddle_half_h + 0.02,
             serve_y=config.serve_y,
             ball_r=BALL_R,
             net=_NET.format(h2=config.net_height / 2, ty=config.target_y) if config.net else "",
-            opponent=_OPPONENT.format(opp_y=-config.paddle_y, paddle_half_h=config.paddle_half_h)
+            opponent=_OPPONENT.format(
+                opp_y=-config.paddle_y,
+                paddle_half_h=config.paddle_half_h,
+                paddle_z=config.paddle_half_h + 0.02,
+            )
             if config.rally
             else "",
             opp_act=_OPP_ACT if config.rally else "",
