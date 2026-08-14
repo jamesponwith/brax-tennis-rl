@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jp
 import pytest
 
-from envs import Tennis, TennisConfig, predict_landing
+from envs.tennis import Tennis, TennisConfig, predict_landing
 
 CFG = TennisConfig()
 

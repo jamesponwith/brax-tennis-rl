@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # repo root for envs/
 from brax.io import html, model
 from brax.training.agents.ppo import train as ppo
 
-from envs import Tennis
+from envs.tennis import Tennis
 
 FULL = {
     "num_timesteps": 8_000_000,
@@ -90,13 +90,13 @@ def main() -> None:
     print(f"final interception rate: {rates[-1]:.1%}  (artifacts in {args.out}/)")
 
 
-def _render_rollout(env: Tennis, inference_fn, out: Path, episodes: int = 5) -> None:
+def _render_rollout(env: Tennis, inference_fn, out: Path) -> None:
     import jax
 
     jit_reset, jit_step, jit_infer = jax.jit(env.reset), jax.jit(env.step), jax.jit(inference_fn)
     rng = jax.random.PRNGKey(0)
     frames = []
-    for _ in range(episodes):
+    for _ in range(5):  # a handful of serves per gif
         rng, r = jax.random.split(rng)
         state = jit_reset(r)
         for _ in range(200):
