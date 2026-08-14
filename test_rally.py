@@ -30,6 +30,7 @@ def test_sizes_match_phase2(env):
     state = env.reset(jax.random.PRNGKey(0))
     assert state.obs.shape == (10,), "learner interface must stay warm-startable"
     assert env.sys.act_size() == 4  # learner 2 + opponent 2
+    assert env.action_size == 2, "trainer must size the policy for the learner only"
 
 
 def test_opponent_mirror_actuation(env):
