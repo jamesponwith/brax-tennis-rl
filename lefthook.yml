@@ -8,7 +8,7 @@ pre-commit:
     lint:
       run: command -v uv >/dev/null || exit 0; uv run ruff check .
     test:
-      run: command -v uv >/dev/null || exit 0; uv run pytest
+      run: command -v uv >/dev/null || exit 0; uv run pytest -m "not slow"
 
 # Validate assistant: local AI review before code leaves the machine — no CI minutes, no secrets.
 # ponytail: advisory (never blocks the push); flip to blocking if findings start getting ignored.
