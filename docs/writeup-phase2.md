@@ -81,8 +81,8 @@ CPU.
 - Prefer mechanical fixes — a joint limit, a taller paddle — over reward
   surgery. Physics can't be reward-hacked.
 
-Next: Part 3 — self-play, and the bug where the paddle's own weight jammed
-it against the floor.
+Next: [Part 3](writeup-phase3.md) — self-play, and the bug that beat every
+probe.
 
 *Built inside a [personal agentic flywheel](https://github.com/jamesponwith/agentic-flywheel)
 — every fix above landed as a gated PR with tests. The repo is
