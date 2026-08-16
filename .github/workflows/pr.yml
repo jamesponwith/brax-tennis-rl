@@ -19,3 +19,30 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv run pytest
+
+  # No bead, no build — checked rather than remembered. Advisory for now
+  # (ADR 0001: a gate goes blocking only once its noise level is known).
+  intent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: BASE_REF=origin/${{ github.base_ref }} tools/flywheel/bead-lint.sh
+
+  # Facts, not judgement: the pre-push security lens reasons about the code,
+  # this checks what is verifiably true about secrets and dependencies.
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans history, not just the tip
+      - uses: astral-sh/setup-uv@v5
+      - name: secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: vulnerabilities
+        # Advisory until the noise level is known.
+        run: uv run --with pip-audit pip-audit || echo "::warning::pip-audit found issues — triage into a bead"
