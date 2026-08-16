@@ -72,3 +72,22 @@ bd close <id>         # Complete work
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
+
+## Agents
+
+- Bound by autonomy boundaries (agentic-flywheel ADR 0003): branch, commit,
+  gate, PR, comment, reserve territory — never merge, tag, deploy, force-push,
+  or read secrets.
+- `tools/flywheel/guard.sh check` is the kill switch; check it before acting.
+- `/flywheel-next` is the unit of autonomous work: one bead, one worktree, one
+  PR, then stop. "Could not finish" is a correct outcome — leave the bead open
+  with a comment rather than papering over a red gate.
+- `/flywheel-review` runs the three-lens panel at pre-push and records every
+  finding, including rejected ones, in `.flywheel/review.jsonl`.
+
+## Not adopted: Operate
+
+This is a training project, not a service — there is nothing deployed to probe,
+so `docs/slo.yml` and `operate.yml` are deliberately absent rather than missing.
+`fleet doctor` reports them as optional gaps; that is the tool being imprecise,
+not this repo being behind (agentic-flywheel `fw-fsa.8`).
