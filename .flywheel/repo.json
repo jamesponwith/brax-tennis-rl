@@ -1,0 +1,5 @@
+{
+  "_comment": "Declares what this repo is, so doctor -self does not report gaps it has no use for.",
+  "lang": "python",
+  "skip_stages": ["operate"]
+}
