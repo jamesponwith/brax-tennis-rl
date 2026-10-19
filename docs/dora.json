@@ -28,16 +28,21 @@
     }
   },
   "change_failure_rate": {
+    "attempts": 1,
+    "failed_deploys": 0,
     "incidents": 0,
     "rate": 0,
     "releases": 1
   },
   "deploy_frequency": {
+    "last_30d": 0,
     "per_week": 0,
     "releases_last_30d": 0,
-    "releases_total": 1
+    "releases_total": 1,
+    "source": "releases",
+    "total": 1
   },
-  "generated_at": "2026-10-12T14:53:51Z",
+  "generated_at": "2026-10-19T12:38:57Z",
   "lead_time_hours": {
     "median": 0,
     "samples": 0
